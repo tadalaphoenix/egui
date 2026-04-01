@@ -134,6 +134,17 @@ impl Plugin for LabelSelectionState {
             // state.selection = None; // TODO(emilk): this makes sense, but doesn't work as expected.
         }
 
+        // Clear stale drag state at the start of each frame. `is_dragging`
+        // persists across frames but was only cleared by the edge-triggered
+        // `any_released()` in `on_end_pass`, which can be missed. The
+        // level-check here ensures we never enter a frame thinking we're
+        // dragging when no button is actually held.
+        if self.is_dragging
+            && !ui.input(|i| i.pointer.button_down(crate::PointerButton::Primary))
+        {
+            self.is_dragging = false;
+        }
+
         self.selection_bbox_last_frame = self.selection_bbox_this_frame;
         self.selection_bbox_this_frame = Rect::NOTHING;
 
@@ -198,7 +209,17 @@ impl Plugin for LabelSelectionState {
             self.selection = None;
         }
 
-        if ui.input(|i| i.pointer.any_released()) {
+        // Clear drag state when no primary button is held. The previous
+        // `any_released()` check is an edge-trigger that fires only on the
+        // single frame a button transitions from pressed→released. If that
+        // frame is missed (e.g. release while cursor is outside the window,
+        // or press+release processed in the same frame), `is_dragging` gets
+        // stuck forever — causing phantom text selection on hover.
+        // The level-check `!button_down(Primary)` is the robust fallback.
+        if ui.input(|i| {
+            i.pointer.any_released()
+                || !i.pointer.button_down(crate::PointerButton::Primary)
+        }) {
             self.is_dragging = false;
         }
 
@@ -317,6 +338,7 @@ impl LabelSelectionState {
             multi_widget_text_select || selection.primary.widget_id == response.id;
 
         if self.is_dragging
+            && ui.input(|i| i.pointer.button_down(crate::PointerButton::Primary))
             && may_select_widget
             && let Some(pointer_pos) = ui.ctx().pointer_interact_pos()
         {
