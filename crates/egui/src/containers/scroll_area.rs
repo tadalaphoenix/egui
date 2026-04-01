@@ -161,7 +161,11 @@ pub struct ScrollSource {
 
 impl Default for ScrollSource {
     fn default() -> Self {
-        Self::ALL
+        Self {
+            scroll_bar: true,
+            drag: false,
+            mouse_wheel: true,
+        }
     }
 }
 
